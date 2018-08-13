@@ -33,6 +33,163 @@ using std::type_info;
   -----------------------------*/
 
 class output_table;
+class column_group;
+
+/**
+  	\brief A node in the hierarchy of columns.
+
+	Subclasses of this class include column groups,
+	columns, and tables. This is basically a named node
+	in a hierarchical space.
+
+	Objects of this class and its subclasses are not copyable or 
+	movable. Therefore, proper lifetime management must be provided.
+  */
+class column_item 
+{
+private:
+	column_group* _parent;
+	string _name;
+	size_t _index;
+
+	friend class column_group;
+
+protected:
+	void _check_unlocked();
+
+public:
+
+	/**
+		\brief Construct an item.
+
+		If a parent is provided, the item is added to the parent.
+
+		@param parent the parent group or nullptr
+		@param name the name of this item
+	  */
+	column_item(column_group* parent, const string& name);
+
+	column_item(const column_item&)=delete;
+	column_item(column_item&&)=delete;
+
+
+	/**
+		Destroy the item.
+
+		If the item belongs to a group, then it is removed from it.
+	  */
+	virtual ~column_item();
+
+	/**
+		\brief The name of this column_item.
+	  */
+	inline const string& name() const { return _name; }
+
+	/**
+		\brief The parent group for this item.
+	  */
+	inline column_group* parent() const { return _parent; }
+
+	/**
+		\brief Index of column in the table
+	  */
+	inline size_t index() const { return _index; }
+
+	/**
+		\brief The table that owns this item.
+
+		If the item is itself a table, `this` is returned. If there is
+		no table owning this item, nullptr is returned.
+	  */
+	virtual output_table* table();
+
+	typedef const std::function<void(column_item*)>& visitor;
+
+	/**
+		\brief Visit this column item and all subitems (if any)
+
+		The traversal is done in pre-order.
+
+		@param func a function to call on each item
+	 */
+	virtual void visit(visitor f);
+};
+
+
+/**
+  	\brief A group node in the hierarchy of columns.
+
+  */
+class column_group : public column_item
+{
+protected:
+	std::vector<column_item *> _children;					/// the children
+	std::unordered_map<string, column_item*> _item_names;	/// the child names (must be unique)
+	bool _dirty;											/// signal that children have been deleted
+
+	void _mark_dirty();
+	void _mark_dirty_columns();
+	virtual void _cleanup();
+
+public:
+
+	/**
+		Constructor
+
+		@param parent the parent group, or null
+		@param name the name of this group
+	  */
+	column_group(column_group* parent, const string& name);
+
+	/**
+		Destructor.
+
+		This call will remove all child items when called.
+	  */
+	virtual ~column_group();
+
+
+	/**
+	   \brief Add a column item to this table.
+	   @param col pointer to the item to add
+	 */
+	void add(column_item* col);
+
+
+	/**
+	   \brief Remove a column to this table.
+	   @param col pointer to the item to remove
+	 */
+	void remove(column_item* col);
+
+	/**
+		\brief Visit this group object and recurse.
+		@see column_item::visit()
+	  */
+	void visit(visitor f) override;
+
+	/**
+	  	\brief Get an item by path name
+
+	  	A path has the form 
+	  	```
+	  	N1/N2/.../Nk
+	  	```
+	  	where each Ni is a name.
+
+		@param path the path to an item, starting from this group
+		@returns an item
+		@throws std::invalid_argument if the path does not exist
+	  */
+	column_item* get(const string& path);
+
+	/**
+		\brief Get the vector of child items of this group.
+	  */
+	const std::vector<column_item*>& children();
+
+};
+
 
 /**
 	\brief The base class for table columns.
@@ -47,12 +204,10 @@ class output_table;
 	the table side.	Because columns are table components, they are non-copyable, 
 	non-movable objects.
   */
-class basic_column 
+class basic_column : public column_item
 {
 protected:
-	output_table* _table;	/// The table owning this column, or null
-	string _name;			/// The column name
-	size_t _index;			///	The column index in the owning table
+	column_group* _group;	/// The group owning this column, or null
 	string _format;			/// The column's format
 	type_index _type;		/// The column's type
 	size_t _size;			/// The column's size (in bytes)
@@ -71,7 +226,7 @@ public:
 		@param _a the binary alignment for the column type
 	  */
 	basic_column(
-		output_table* _tab, const string& _name, const string& f, 
+		column_group* _group, const string& _name, const string& f, 
 		const type_info& _t, size_t _s, size_t _a);
 
 	basic_column(const basic_column&)=delete;
@@ -83,21 +238,6 @@ public:
 		This will remove it from the table it belong to
 	  */
 	virtual ~basic_column();
-
-	/**
-		\brief The table of this column
-	  */
-	inline output_table* table() const { return _table; }
-
-	/**
-		\brief The name of this column.
-	  */
-	inline const string& name() const { return _name; }
-
-	/**
-		\brief Index of column in the table
-	  */
-	inline size_t index() const { return _index; }
 
 	/**
 		\brief The column's preferred text format
@@ -190,8 +330,8 @@ public:
 		@param _n   the column name
 		@param fmt  the column's text format 
 	  */
-	column(output_table* _tab, const string& _n, const string& fmt) 
-	: basic_column(_tab, _n, fmt, typeid(T), sizeof(T), alignof(T)) { }
+	column(column_group* _grp, const string& _n, const string& fmt) 
+	: basic_column(_grp, _n, fmt, typeid(T), sizeof(T), alignof(T)) { }
 
 	/**
 		\brief Construct an unbound column
@@ -208,8 +348,8 @@ public:
 		@param fmt  the column's text format 
 		@param _v   the initial value
 	  */
-	column(output_table* _tab, const string& _n, const string& fmt, const T& _v) 
-	: basic_column(_tab, _n, fmt, typeid(T), sizeof(T), alignof(T)), val(_v) { }
+	column(column_group* _grp, const string& _n, const string& fmt, const T& _v) 
+	: basic_column(_grp, _n, fmt, typeid(T), sizeof(T), alignof(T)), val(_v) { }
 
 	/**
 		\brief Construct an unbound column and initialize its value
@@ -297,8 +437,8 @@ protected:
 	const size_t maxlen;
 	string val;
 public:
-	column(output_table* _tab, const string& _n, size_t _maxlen, const string& fmt) 
-	: basic_column(_tab, _n, fmt, 
+	column(column_group* _grp, const string& _n, size_t _maxlen, const string& fmt) 
+	: basic_column(_grp, _n, fmt, 
 		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])), 
 		maxlen(_maxlen) 
 		{ }
@@ -309,8 +449,8 @@ public:
 		maxlen(_maxlen) 
 		{ }
 
-	column(output_table* _tab, const string& _n,  size_t _maxlen, const string& fmt, const string& _v) 
-	: basic_column(_tab, _n, fmt, 
+	column(column_group* _grp, const string& _n,  size_t _maxlen, const string& fmt, const string& _v) 
+	: basic_column(_grp, _n, fmt, 
 		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])), 
 			maxlen(_maxlen), val(_v) 
 		{ }
@@ -513,8 +653,8 @@ public:
 		@param fmt the column format
 		@param _r reference to the variable holding the column value
 	  */
-	column_ref(output_table* _tab, const string& _n, size_t _maxlen, const string& fmt, string& _r) 
-	: basic_column(_tab, _n, fmt, 
+	column_ref(column_group* _grp, const string& _n, size_t _maxlen, const string& fmt, string& _r) 
+	: basic_column(_grp, _n, fmt, 
 		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
 		maxlen(_maxlen), ref(_r) 
 	{ }
@@ -591,6 +731,7 @@ enum class table_flavor {
 };
 
 
+
 /**
 	An output table.
 
@@ -630,24 +771,21 @@ enum class table_flavor {
 	convention, as it will be used in output formats. 
 
   */
-class output_table
+class output_table : public column_group
 {
-protected:
-	string _name;				// table name
-	bool en;					// enabled flag
+private:
+	bool _dirty_columns;		// flags that columns needs to be rebuilt
+	friend class column_group;
 	std::vector<basic_column *> columns;		// the columns
-	std::unordered_map<string, basic_column*> 
-									colnames;	// the column names
+
+protected:
+	bool en;					// enabled flag
 	output_binding::list files;	// the bindings
 	bool _locked;				// signal that the table allows updates
-	bool _dirty;				// signal that columns have been deleted
 	table_flavor _flavor;		// advice to files/formats
 
-	inline void _check_unlocked() {
-		if(_locked) throw std::logic_error("cannot modify locked output_table");
-	}
+	virtual void _cleanup() override;
 
-	void _cleanup();
 	friend struct output_binding;
 	/**
 	   \brief Construct an output table with given name and flavor.
@@ -660,10 +798,22 @@ protected:
 
 public:
 
+
 	/**
-		\brief The name of this column.
+		\brief Returns this table as the owning table
 	  */
-	inline const string& name() const { return _name; }
+	virtual output_table* table() override;
+
+
+	/**
+		Return the locking status of the table.
+
+		A table is locked once the prolog() method is called and it becomes
+		unlocked when the epilog() method is called. While a table is locked,
+		no column_item owned by this table can be added, modified or deleted.
+	  */
+	inline bool is_locked() const { return _locked; }
+
 
 	/**
 	   \brief Add a column to this table.
@@ -734,12 +884,10 @@ public:
 	}
 
 	/**
-		\brief Return a column by name
+		\brief Return a column item by name
 	  */
-	inline basic_column* operator[](const string& n) { 
-		_cleanup();
-		return colnames.at(n);
-	}
+	basic_column* operator[](const string& n);
+
 
 	/**
 		\brief Set the enabled flag of the table

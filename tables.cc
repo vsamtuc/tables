@@ -5,6 +5,8 @@
 #include <iostream>
 
 #include <boost/core/demangle.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 #include "tables.hh"
 #include "hdf5_util.hh"
@@ -61,6 +63,187 @@ output_binding* output_binding::find(list& L, output_table* t)
 }
 
 
+//--------------------------------------------
+//
+// Column items 
+// 
+//--------------------------------------------
+
+
+column_item::column_item(column_group* p, const string& n) 
+: _parent(p), _name(n)
+{ 
+	if(_name.empty())
+		throw std::runtime_error("Column items cannot have empty name");
+	if(_parent)
+		_parent->add(this);
+}	
+
+column_item::~column_item()
+{ 
+	if(_parent) {
+		_parent->remove(this);
+	}	
+}
+
+void column_item::_check_unlocked()
+{
+	output_table* owner = table();
+	if(owner && owner->is_locked()) 
+		throw std::logic_error("cannot modify item owned by locked output_table");
+}
+
+output_table* column_item::table() 
+{
+	return (_parent == nullptr) ? nullptr : _parent->table();
+}
+
+
+void column_item::visit(const std::function<void(column_item*)>& f)
+{
+	f(this);
+}
+
+
+//----------------------------------------------
+//
+// Column groups
+//
+//----------------------------------------------
+
+
+
+column_group::column_group(column_group* p, const string& n)
+	: column_item(p,n), _dirty(false)
+{ }	
+
+column_group::~column_group()
+{
+	_check_unlocked();
+	for(auto c : _children) {
+		// dissociate with column
+		if(c) remove(c);
+	}	
+}
+
+void column_group::_mark_dirty()
+{
+	if(_dirty)
+		return;
+	if(_parent)
+		_parent->_mark_dirty();
+	_dirty = true;	
+}
+
+
+void column_group::_mark_dirty_columns()
+{
+	output_table* tab = table();
+	if(tab)
+		tab->_dirty_columns = true;
+}
+
+void column_group::_cleanup()
+{
+	if(!_dirty) return; 	// we are clean
+	size_t pos=0;
+	for(size_t i=0; i< _children.size(); i++) {
+		// loop invariants: 
+		//  (1) pos <= i
+		//  (2) the range [0:pos) contains nonnulls
+		//  (3) every initial nonnull in [0:i) is in [0:pos)
+
+		if(_children[i]) {
+			// move current child to pos if needed
+			if(pos < i) {
+				assert(_children[pos]==nullptr); 
+				_children[pos] = _children[i];
+
+				assert(_children[pos]->_index == i); 
+				_children[pos]->_index = pos; 
+			}
+			// clean up a child that is a group
+			column_group* _child = dynamic_cast<column_group*>(_children[pos]);
+			if(_child)
+				_child->_cleanup();
+			// advance pos
+			pos++;
+		}
+	}
+	assert(pos <= _children.size()); // since we were dirty!
+	if(pos < _children.size())
+		_children.resize(pos);		// prune the vector
+	_dirty = false; 			// we are clean!
+}
+
+
+void column_group::add(column_item* col)
+{
+	_check_unlocked();
+	//_cleanup();
+
+	if(col->_parent)
+		throw std::runtime_error("column already added to a table");
+	if(_item_names.count(col->name())!=0) {
+		throw std::runtime_error(std::string("a column item by this name already exists: ")+col->name());
+	}
+	col->_parent = this;
+	col->_index = _children.size();
+	_children.push_back(col);
+	_item_names[col->name()] = col;
+	_mark_dirty_columns();
+}
+
+
+void column_group::remove(column_item* col)
+{
+	_check_unlocked();
+	if(col->_parent != this) 
+		throw std::invalid_argument(
+			"column_group::remove(col) column not bound to this table");
+	assert(_children[col->_index]==col);
+	_children[col->_index] = nullptr;
+	_item_names.erase(col->name());
+	assert(_item_names.find(col->name())==_item_names.end());
+	col->_parent = nullptr;
+	_mark_dirty();
+}
+
+
+void column_group::visit(column_item::visitor f)
+{
+	f(this);
+	for(auto c : _children)
+		if(c!=nullptr)
+			c->visit(f);
+}
+
+
+
+column_item* column_group::get(const string& path)
+{
+	std::vector<string> inames;
+	boost::split(inames, path, boost::is_any_of("/"));
+	if( ! std::all_of(inames.begin(), inames.end(), [](auto s) { return s.size()>0; }) )
+		throw std::runtime_error("empty name in path");
+	column_item* ret=this;
+	for(const string&  iname : inames) {
+		column_group* grp = dynamic_cast<column_group*>(ret);
+		if(! grp)
+			throw std::runtime_error("path not found");
+		ret = grp->_item_names.at(iname);
+	}
+	return ret;
+}
+
+const std::vector<column_item*>& column_group::children()
+{
+	_cleanup();
+	return _children;
+}
+
+
+
 //-------------------------------------
 //
 // basic_column
@@ -68,25 +251,17 @@ output_binding* output_binding::find(list& L, output_table* t)
 //-------------------------------------
 
 
-basic_column::basic_column(output_table* _tab, const string& _name, 
+basic_column::basic_column(column_group* _grp, const string& _name, 
 	const string& f, 
 	const type_info& _t, size_t _s, size_t _a)
-: 	_table(nullptr), 
-	_name(_name), 
+: 	column_item(_grp, _name), 
 	_format(f), 
 	_type(_t), _size(_s), _align(_a)
- {
- 	if(_name.size() < 1) 
- 		throw std::length_error("Empty column name is not allowed");
- 	if(_tab) _tab->add(*this);
- }
+ { }
 
 
 basic_column::~basic_column()
 {
-	if(_table) {
-		_table->remove(*this);
-	}
 }
 
 void basic_column::set(double val)
@@ -137,10 +312,8 @@ const output_table::registry& output_table::all()
 
 
 output_table::output_table(const string& _name, table_flavor _f)
-: _name(_name), en(true), _locked(false), _dirty(false), _flavor(_f)
+: column_group(nullptr, _name), _dirty_columns(false), en(true), _locked(false), _flavor(_f)
 {
-	if(_name.empty())
-		throw std::runtime_error("Table cannot have empty name");
 	if(__table_registry().count(_name)>0)
 		throw std::runtime_error("A table of name `"+_name+"' is already registered");
 	__table_registry()[_name] = this;
@@ -150,72 +323,46 @@ output_table::output_table(const string& _name, table_flavor _f)
 
 output_table::~output_table()
 {
-	for(auto c : columns) {
-		// dissociate with column
-		if(c) c->_table = 0;
-	}
 	output_binding::unbind_all(files);
 	__table_registry().erase(this->name());
 	__all_tables().erase(this);
 }
 
 
+output_table* output_table::table() 
+{
+	return this;
+}
+
+
 void output_table::_cleanup()
 {
-	if(!_dirty) return; 	// we are clean
-	size_t pos=0;
-	for(size_t i=0; i<columns.size(); i++) {
-		// loop invariants: 
-		//  (1) pos <= i
-		//  (2) the range [0:pos) contains nonnulls
-		//  (3) every initial nonnull in [0:i) is in [0:pos)
+	if(_dirty)
+		column_group::_cleanup();
+	assert(! _dirty);
+	if(_dirty_columns) {
+		columns.clear();
 
-		if(columns[i]) {
-			if(pos < i) {
-				assert(columns[pos]==nullptr); 
-				columns[pos] = columns[i];  
+		visit([&](column_item* item) {
+			basic_column* col = dynamic_cast<basic_column*>(item);
+			if(col)
+				columns.push_back(col);
+		});
 
-				assert(columns[pos]->_index == i); 
-				columns[pos]->_index = pos; 
-			}
-			pos++;
-		}
+		_dirty_columns = false;
 	}
-	assert(pos<columns.size()); // since we were dirty!
-	columns.resize(pos);		// prune the vector
-	_dirty = false; 			// we ar clean!
 }
+
 
 void output_table::add(basic_column& col) 
 {
-	_check_unlocked();
-
-	_cleanup();
-
-	if(col._table)
-		throw std::runtime_error("column already added to a table");
-	if(colnames.count(col.name())!=0) {
-		throw std::runtime_error(std::string("a column by this name already exists: ")+col.name());
-	}
-	col._table = this;
-	col._index = columns.size();
-	columns.push_back(&col);
-	colnames[col.name()] = &col;
+	column_group::add(&col);
 }
 
 
 void output_table::remove(basic_column& col)
 {
-	_check_unlocked();
-	if(col._table != this) 
-		throw std::invalid_argument(
-			"output_table::remove(col) column not bound to this table");
-	assert(columns[col._index]==&col);
-	columns[col._index] = nullptr;
-	colnames.erase(col.name());
-	assert(colnames.find(col.name())==colnames.end());
-	col._table = nullptr;
-	_dirty = true;
+	column_group::remove(&col);
 }
 
 
