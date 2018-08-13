@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include <boost/core/demangle.hpp>
+
 #include "tables.hh"
 #include "hdf5_util.hh"
 
@@ -257,6 +259,33 @@ void output_table::epilog()
 }
 
 
+void output_table::generate_schema(std::ostream& out)
+{
+	using std::endl;
+	// output top-level
+	out << "{" << endl;
+	out << "\t\"name\": \"" << name() << "\"," << endl;
+	out << "\t\"columns\": [";
+
+	// output columns
+	for(size_t i=0; i<size(); i++) {
+		out << "\t\t{" << endl;
+
+		basic_column* col = (*this)[i];
+		out << "\t\t\t\"name\": \"" << col->name() << "\"," << endl;
+		out << "\t\t\t\"type\": \"" << boost::core::demangle(col->type().name()) << "\"," << endl;
+		out << "\t\t\t\"arithmetic\": " << (col->is_arithmetic() ? "true" : "false") << endl;
+
+		out << "\t\t}";
+		if( (i+1)<size() ) out << ",";
+		out << endl;
+	}
+
+	out << "\t]" << endl;
+	out << "}" << endl;
+}
+
+
 result_table::result_table(const string& _name)
 	: output_table(_name, table_flavor::RESULTS)
 {
@@ -395,7 +424,9 @@ void formatter::destroy(formatter* fmt)
 }
 
 //-------------------------------
-// Methods
+//
+// A C-style file
+//
 //-------------------------------
 
 void output_c_file::open(const string& fpath, open_mode mode)
@@ -492,7 +523,7 @@ output_c_file tables::output_stderr(stderr, false);
 
 //-------------------------------------
 //
-// Progress bar
+// A memory file 
 //
 //-------------------------------------
 

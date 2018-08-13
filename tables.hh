@@ -11,7 +11,7 @@
 #include <functional>
 #include <typeinfo>
 #include <typeindex>
-
+#include <iostream>
 
 
 namespace H5
@@ -779,6 +779,29 @@ public:
 		A call to this method must follow all output operations
 	  */
 	void epilog();    // calls files to e.g. print a footer
+
+
+	/**
+		@brief Generate a JSON description of the columns of this table.
+
+		The description format is a JSON object of the form
+		\verbatim
+		{
+			"name": <table name>,
+			"columns": [
+				{
+					"name": "somecol",
+					"type": "double",
+					"arithmetic": true
+				},
+				...
+			]
+		}
+
+		@param out the output stream to receive the JSON
+	 */
+	virtual void generate_schema(std::ostream& out);
+
 
 	// static members
 

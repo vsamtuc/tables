@@ -32,8 +32,13 @@ DX_PS_FEATURE(off)
 DX_PDF_FEATURE(off)
 
 # Checks for libraries.
+
 #AX_BOOST_BASE([1.58.0], [], [AC_MSG_ERROR(
 #              [Please install boost >= 1.58 (including filesystem)])])
+
+#AC_CHECK_LIB([libjsoncpp],[Json::valueToString])
+
+PKG_CHECK_MODULES([JSONCPP], [jsoncpp >= 1.5.0] )
 
 AX_LIB_HDF5()
 

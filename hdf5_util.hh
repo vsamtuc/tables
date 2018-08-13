@@ -55,7 +55,7 @@ struct output_hdf5::table_handler
 };
 
 /*
-	This table is actually defined in output.cc
+	This table is actually defined in tables.cc
  */
 extern std::map<type_index, H5::DataType> __pred_type_map; 
 
