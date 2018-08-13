@@ -2,9 +2,10 @@
 #define __OUTPUT_TESTS_HH__
 
 #include <sstream>
-#include "tables.hh"
-
 #include <cxxtest/TestSuite.h>
+#include <jsoncpp/json/json.h>
+
+#include "tables.hh"
 #include "hdf5_util.hh"
 
 
@@ -551,6 +552,36 @@ public:
 			"1,Hello,2,world,My string\n"
 			"10,Ho ho ho,2,world,My string\n"
 			);
+
+
+		// output the table schema
+		std::stringstream schema;
+		table.generate_schema(schema);
+
+		// parse it with Jsoncpp
+		Json::Value sch;
+		TS_ASSERT_THROWS_NOTHING(schema >> sch);
+
+		TS_ASSERT(sch.isObject());
+		TS_ASSERT(sch.isMember("name"));
+		TS_ASSERT_EQUALS(sch["name"].asString(), "myresults");
+
+		TS_ASSERT(sch.isMember("columns"));
+		TS_ASSERT(sch["columns"].isArray());
+
+		Json::Value cols = sch["columns"];
+		TS_ASSERT_EQUALS(cols.size(), table.size());
+
+		for(Json::Value::ArrayIndex i=0; i<table.size(); i++) {
+			TS_ASSERT(cols[i].isObject());
+			TS_ASSERT(cols[i].isMember("name"));
+			TS_ASSERT(cols[i].isMember("type"));
+			TS_ASSERT(cols[i].isMember("arithmetic"));
+			TS_ASSERT_EQUALS(cols[i].size(), 3);
+			TS_ASSERT_EQUALS(cols[i]["name"].asString(), table[i]->name());
+			TS_ASSERT_EQUALS(cols[i]["arithmetic"].asBool(), table[i]->is_arithmetic());
+		}
+
 	}
 
 
