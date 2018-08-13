@@ -5,6 +5,8 @@
 #include <iostream>
 
 #include <boost/core/demangle.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 #include "tables.hh"
 #include "hdf5_util.hh"
@@ -220,10 +222,21 @@ void column_group::visit(column_item::visitor f)
 
 column_item* column_group::get(const string& path)
 {
-
+	std::vector<string> inames;
+	boost::split(inames, path, boost::is_any_of("/"));
+	if( ! std::all_of(inames.begin(), inames.end(), [](auto s) { return s.size()>0; }) )
+		throw std::runtime_error("empty name in path");
+	column_item* ret=this;
+	for(const string&  iname : inames) {
+		column_group* grp = dynamic_cast<column_group*>(ret);
+		if(! grp)
+			throw std::runtime_error("path not found");
+		ret = grp->_item_names.at(iname);
+	}
+	return ret;
 }
 
-const std::vector<column_item*>& children()
+const std::vector<column_item*>& column_group::children()
 {
 	_cleanup();
 	return _children;
