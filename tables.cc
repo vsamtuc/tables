@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <stack>
+#include <regex>
 
 #include <boost/core/demangle.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -543,6 +544,113 @@ output_file::~output_file()
 	output_binding::unbind_all(tables);
 }
 
+
+
+
+#define RE_FNAME "[a-zA-X0-9 _:\'\\.\\-\\$]+"
+#define RE_PATH "(/?(?:" RE_FNAME "/)*(?:" RE_FNAME "))"
+#define RE_ID   "[a-zA-Z_][a-zA-Z0-9_]*"
+#define RE_TYPE "(" RE_ID  "):"
+#define RE_VAR  RE_ID "=" RE_PATH
+#define RE_VARS RE_VAR "(?:," RE_VAR ")*" 
+#define RE_URL  RE_TYPE RE_PATH "?(?:\\?(" RE_VARS "))?" 
+
+bool tables::parse_url(const string& url, string& type, string& path, varmap& vars)
+{
+	using std::regex;
+	using std::smatch;
+	using std::regex_match;
+	using std::sregex_token_iterator;
+	
+	regex re_url(RE_URL);
+	smatch match;
+	
+	if(! regex_match(url, match, re_url))
+		return false;
+
+	type = match[1];
+	path = match[2];
+	string allvars = match[3];
+
+	// split variables
+	regex re_var( "(" RE_ID ")=(" RE_PATH ")" );
+	regex re_comma(",");
+	auto s = sregex_token_iterator(allvars.begin(), allvars.end(), re_comma, -1);
+	auto s2 = sregex_token_iterator();
+	for(; s!=s2; ++s) {
+		string var =*s;
+		smatch vmatch;
+		regex_match(var, vmatch, re_var);
+		string vname = vmatch[1];
+		string vvalue = vmatch[2];
+		if(! vname.empty()) vars[vname] = vvalue; 
+	}
+
+	return true;
+}
+
+
+
+
+//
+// Helper namespace for open_file
+//
+namespace {
+
+std::unordered_map<string, open_mode> open_mode_map {
+	{"append", open_mode::append},
+	{"truncate", open_mode::truncate}
+};
+
+std::unordered_map<string, text_format> text_format_map {
+        { "cvstab", text_format::csvtab},
+        { "csvrel", text_format::csvrel}
+};
+
+template <typename T>
+T proc_enum_var(const string& var, 
+		const std::map<string, string>& vars, 
+		const std::unordered_map<string, T>& valmap, 
+		T defval)
+{
+	if(vars.count(var)>0) {
+		const string& val = vars.at(var);
+		if(valmap.count(val)==0)
+			throw std::runtime_error("Illegal value in URL: "+var+"="+val);
+		return valmap.at(val);
+	} else {
+		return defval;
+	}
+}
+
+}
+
+
+output_file* tables::open_file(const string& url)
+{
+	string type;
+	string path;
+	varmap vars;
+
+    if(! parse_url(url, type, path, vars))
+		throw std::runtime_error("Malformed url `"+url+"'");
+
+	open_mode   mode = proc_enum_var("open_mode", vars, open_mode_map, default_open_mode);
+	text_format format = proc_enum_var("format", vars, text_format_map, default_text_format);
+
+    if(type == "file")
+        return new output_c_file(path, mode, format);
+    else if (type == "hdf5")
+        return new output_hdf5(path, mode);
+	else if (type == "stdout")
+        return &output_stdout;
+    else if (type == "stderr")
+        return &output_stderr;
+    throw std::runtime_error("Unknown output_file type in URL: `"+type+"'");
+}
+
+
+
 //-------------------------------------
 //
 // C (STDIO) files
@@ -788,42 +896,42 @@ string output_mem_file::str()
 
 
 progress_bar::progress_bar(FILE* s, size_t b, const string& msg)
-        : stream(s), message(msg), 
-        N(0), i(0), ni(0), B(b), l(0), finished(false)
-        { }
+		: stream(s), message(msg), 
+		N(0), i(0), ni(0), B(b), l(0), finished(false)
+		{ }
 
 void progress_bar::start(unsigned long long _N)
 {	
 	N = _N;
 	i=0; ni=0; l=0;
 
-    ni = nexti();
-    size_t spc = B+1+message.size();
-    for(size_t j=0; j< spc; j++) putchar(' ');
-    fprintf(stream, "]\r%s[", message.c_str());
-    fflush(stream);
-    tick(0);
+	ni = nexti();
+	size_t spc = B+1+message.size();
+	for(size_t j=0; j< spc; j++) putchar(' ');
+	fprintf(stream, "]\r%s[", message.c_str());
+	fflush(stream);
+	tick(0);
 }
 
 void progress_bar::adjustBar()
 {
-    if(i>N) i=N;
-    while(i >= ni)  {
-        ++l; ni = nexti();
-        if(l<=B) { fputc('#', stream); }
-    }
-    fflush(stream);
-    if(l==B) {
-    	fprintf(stream,"\n");
-        finished = true;
-    }
+	if(i>N) i=N;
+	while(i >= ni)  {
+		++l; ni = nexti();
+		if(l<=B) { fputc('#', stream); }
+	}
+	fflush(stream);
+	if(l==B) {
+		fprintf(stream,"\n");
+		finished = true;
+	}
 }
 
 void progress_bar::finish()
 {
-    if(finished) return;
-    if(i<N)
-	    tick(N-i);
+	if(finished) return;
+	if(i<N)
+		tick(N-i);
 }
 
 

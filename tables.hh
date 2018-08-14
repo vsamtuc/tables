@@ -1255,6 +1255,17 @@ public:
 };
 
 
+typedef std::map<string, string> varmap;
+
+bool parse_url(const string& url, string& type, string& path, varmap& vmap);
+
+
+/**
+	\brief Factory for output_file objects.
+  */
+output_file* open_file(const string& url);
+
+
 /**
 	\brief Specify the format of text files
 
@@ -1492,13 +1503,31 @@ public:
 
 
 /**
- * \brief Progress bar.
- *
- * This is a utility class printing a progress bar on the terminal.
- * At construction, a total number of ticks, N, is specified.
- * Then, as method tick() is called the progress bar is displayed.
- *
- */
+	\brief Progress bar.
+ 
+	This is a utility class printing a progress bar on the terminal.
+	At construction, a total number of ticks, N, is specified.
+	Then, as method tick() is called the progress bar is displayed.
+
+	The progress bar is displayed as 
+	```
+	My progress message: [#####                  ]
+	```
+	determined by parameters passed at the constructor.
+
+	A typical session looks (in time) something like the following
+	```
+	start(1000);
+	...
+	tick();...tick(); ... tick(20); ....
+	<or>
+	... complete(350); ....  // means "35% is finished"
+	...
+	finish();
+	```
+
+	That is, tick() advances incrementally, and complete() is "abosolutely".
+*/
 class progress_bar
 {
 	typedef unsigned long long llint;

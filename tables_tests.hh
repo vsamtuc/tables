@@ -590,6 +590,91 @@ public:
 	}
 
 
+	void test_open_file()
+	{
+		TS_ASSERT_EQUALS(open_file("stdout:"), &output_stdout);
+		TS_ASSERT_EQUALS(open_file("stderr:"), &output_stderr);
+		TS_ASSERT_THROWS(open_file("foo"), std::runtime_error);
+	}
+
+	void check_purl(const string& url,
+                    const string& type, const string& path, const varmap& vars) 
+	{
+		string ptype;
+		string ppath;
+		varmap pvars;
+
+        TS_ASSERT(parse_url(url, ptype, ppath, pvars));   
+        TS_ASSERT_EQUALS(ptype, type);
+        TS_ASSERT_EQUALS(ppath, path);
+        TS_ASSERT_EQUALS(pvars, vars);
+    }
+
+	void test_parse_url() 
+	{
+		check_purl("file:a/v/hello.cc?x=1,y=hello world",
+		           "file",
+		           "a/v/hello.cc",
+		           varmap { {"x", "1"}, {"y", "hello world"} }
+		        );
+
+		check_purl("file:/hello.cc?open_mode=truncate",
+		           "file",
+		           "/hello.cc",
+		           varmap { {"open_mode", "truncate"}  }
+		        );
+		check_purl("hdf5:/hello.cc", "hdf5", "/hello.cc", varmap{} 
+		        );
+		check_purl("hdf5:/hello.cc?open_mode=append,group=/foo/bar",
+		           "hdf5",
+		           "/hello.cc",
+		           varmap { {"open_mode", "append"}, {"group", "/foo/bar"}  }
+		        );
+		check_purl("hdf5:hello?format=csvtab", 
+			"hdf5", "hello", varmap { {"format","csvtab"} } );
+		check_purl("stdout:", "stdout", "", varmap { } );
+		check_purl("foo:", "foo", "", varmap { } );
+	}
+
+    void check_bad_url(const string& url)
+    {
+    	using std::endl;
+    	using std::ostringstream;
+
+		string ptype;
+		string ppath;
+		varmap pvars;
+
+        if(parse_url(url, ptype, ppath, pvars)) {
+        	ostringstream s;
+        	s << "Malformed url accepted: `"+url+"`" << endl;
+        	s << "  type=`" << ptype << "`" << endl;
+        	s << "  path=`" << ppath << "`" << endl;
+        	s << "  vars=" << pvars.size() << endl ;
+        	for(auto& v : pvars) {
+        		s << "    `" << v.first << "`=`" << v.second << "`" << endl;
+        	}
+        	std::cerr << s.str() << endl;
+        	TS_FAIL(s.str());
+        }
+    }
+
+    void test_bad_url()
+    {
+    	check_bad_url("");
+    	check_bad_url(string());
+    	check_bad_url("foo");
+    	check_bad_url("foo/bar");
+    	check_bad_url(":");
+    	check_bad_url(":asd");
+    	check_bad_url("a/v:asd");
+    	check_bad_url("a:/a/");
+    	check_bad_url("a:/a?a");
+    	check_bad_url("a:?a/b=1");
+    	check_bad_url("a:?=1");
+    	check_bad_url("a:?a='1,2'");
+    	check_bad_url("a:?a=1 for me,one for you");
+    }
 
 };
 
