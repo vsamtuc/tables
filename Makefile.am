@@ -25,8 +25,8 @@ TESTS= tables_tests
 
 check_PROGRAMS= tables_tests
 
-EXTRA_tables_tests_SOURCES= tables_tests.hh
-tables_tests_SOURCES= tables_tests.cc
+EXTRA_tables_tests_SOURCES= tables_tests.hh group_tests.hh 
+tables_tests_SOURCES= tables_tests.cc 
 tables_tests_CPPFLAGS= $(HDF5_CPPFLAGS)
 tables_tests_LDADD= libtables.a $(JSONCPP_LIBS) -lhdf5_cpp -lhdf5_hl_cpp $(HDF5_LIBS) 
 tables_tests_LDFLAGS= $(HDF5_LDFLAGS)
@@ -36,7 +36,7 @@ MAINTAINERCLEANFILES = tables_tests.cc
 
 tables_tests.cc: $(EXTRA_tables_tests_SOURCES)
 	@echo CXXFLAGS= $(CXXFLAGS)
-	cxxtestgen --runner=ErrorPrinter -o $@ $<
+	cxxtestgen --runner=ErrorPrinter -o $@ $^
 
 # documentation
 @DX_RULES@

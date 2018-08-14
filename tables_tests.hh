@@ -575,11 +575,16 @@ public:
 		for(Json::Value::ArrayIndex i=0; i<table.size(); i++) {
 			TS_ASSERT(cols[i].isObject());
 			TS_ASSERT(cols[i].isMember("name"));
+			TS_ASSERT(cols[i].isMember("path"));
 			TS_ASSERT(cols[i].isMember("type"));
 			TS_ASSERT(cols[i].isMember("arithmetic"));
-			TS_ASSERT_EQUALS(cols[i].size(), 3);
+			TS_ASSERT_EQUALS(cols[i].size(), 4);
 			TS_ASSERT_EQUALS(cols[i]["name"].asString(), table[i]->name());
-			TS_ASSERT_EQUALS(cols[i]["arithmetic"].asBool(), table[i]->is_arithmetic());
+			TS_ASSERT_EQUALS(cols[i]["arithmetic"].asBool(), table[i]->is_arithmetic());			
+
+			TS_ASSERT(cols[i]["path"]);
+			TS_ASSERT_EQUALS(cols[i]["path"].size(), 1);
+			TS_ASSERT_EQUALS(cols[i]["path"][0].asString(), table[i]->name());
 		}
 
 	}

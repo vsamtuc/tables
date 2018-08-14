@@ -34,6 +34,8 @@ using std::type_info;
 
 class output_table;
 class column_group;
+class basic_column;
+class columns;
 
 /**
   	\brief A node in the hierarchy of columns.
@@ -57,8 +59,6 @@ private:
 protected:
 	void _check_unlocked();
 
-public:
-
 	/**
 		\brief Construct an item.
 
@@ -68,6 +68,8 @@ public:
 		@param name the name of this item
 	  */
 	column_item(column_group* parent, const string& name);
+
+public:
 
 	column_item(const column_item&)=delete;
 	column_item(column_item&&)=delete;
@@ -84,6 +86,22 @@ public:
 		\brief The name of this column_item.
 	  */
 	inline const string& name() const { return _name; }
+
+	/**
+	  \brief Return the path_name of this item.
+	   
+	   The path name is of the form
+	   ```
+	   N1/N2/.../Nthis
+	   ```
+	   and is created by joining the names of all ancestors of
+	   this, excluding the (top) table, if any.
+
+	   The separator (defaulting to '/') can be given as an argument.
+
+	   @param sep the separator to use.
+	  */
+	string path_name(const string& sep=string("/"));
 
 	/**
 		\brief The parent group for this item.
@@ -113,25 +131,66 @@ public:
 		@param func a function to call on each item
 	 */
 	virtual void visit(visitor f);
+
+
+	/**
+		\brief Returns true if this is a column
+	  */
+	virtual bool is_column() const { return false; }
+
+	/**
+		\brief Returns true if this is a group
+		(but not a table).
+	  */
+	virtual bool is_columns() const { return false; }
+
+	/**
+		\brief Returns true if this is a group
+		(but not a table).
+	  */
+	virtual bool is_table() const { return false; }
 };
+
+
+typedef std::initializer_list<column_item *> column_item_list;
+
 
 
 /**
   	\brief A group node in the hierarchy of columns.
 
+	This class is a base for both `columns` and `output_table`.
+	It is responsible for handling the column hierarchy.
   */
 class column_group : public column_item
 {
 protected:
-	std::vector<column_item *> _children;					/// the children
-	std::unordered_map<string, column_item*> _item_names;	/// the child names (must be unique)
-	bool _dirty;											/// signal that children have been deleted
+	std::vector<column_item *> _children;					//< the children
+	std::unordered_map<string, column_item*> _item_names;	//< the child names (must be unique)
 
+	/** 
+		Signals that children have been deleted.
+		This may leave nulls in the _children vector.
+	  */
+	bool _dirty;											
+
+	/**
+		Mark the _children vector as dirty (containing nulls).
+
+		Note that when a colymn_group is dirty, then its parent is also dirty.
+	  */
 	void _mark_dirty();
-	void _mark_dirty_columns();
-	virtual void _cleanup();
 
-public:
+	/**
+		Mark the owning table's column vector as bad. This is happening whenever the
+		items of the group change in any way.
+	  */
+	void _mark_dirty_columns();
+
+	/**
+		Clean this column_group and recurse to its children.
+	  */
+	virtual void _cleanup();
 
 	/**
 		Constructor
@@ -140,6 +199,9 @@ public:
 		@param name the name of this group
 	  */
 	column_group(column_group* parent, const string& name);
+
+
+public:
 
 	/**
 		Destructor.
@@ -153,20 +215,60 @@ public:
 	   \brief Add a column item to this table.
 	   @param col pointer to the item to add
 	 */
-	void add(column_item* col);
+	void add_item(column_item* col);
 
 
 	/**
 	   \brief Remove a column to this table.
 	   @param col pointer to the item to remove
 	 */
-	void remove(column_item* col);
+	void remove_item(column_item* col);
+
+	/**
+	   \brief Add a column to this table.
+	 */
+	void add(basic_column& col);
+
+	/**
+	   \brief Remove a column to this table.
+	 */
+	void remove(basic_column& col);
+
+	/**
+	   \brief Add a column to this table.
+	 */
+	void add(columns& cols);
+
+	/**
+	   \brief Remove a column to this table.
+	 */
+	void remove(columns& cols);
+
+	/**
+	   \brief Add a column to this table.
+	 */
+	void add(column_item_list cols);
+
+	/**
+	   \brief Remove a column to this table.
+	 */
+	void remove(column_item_list cols);
 
 	/**
 		\brief Visit this group object and recurse.
 		@see column_item::visit()
 	  */
 	void visit(visitor f) override;
+
+
+	/**
+		\brief Get an item by recursive lookup.
+
+		@param path a sequence of names to search sequentially
+		@return the item designated by the `path` sequence
+	  */
+	column_item* get_item(const std::vector<string>& path);
+
 
 	/**
 	  	\brief Get an item by path name
@@ -181,15 +283,14 @@ public:
 		@returns an item
 		@throws std::invalid_argument if the path does not exist
 	  */
-	column_item* get(const string& path);
+	column_item* get_item(const string& path);
 
 	/**
 		\brief Get the vector of child items of this group.
 	  */
-	const std::vector<column_item*>& children();
+	const std::vector<column_item*>& items();
 
 };
-
 
 /**
 	\brief The base class for table columns.
@@ -301,8 +402,10 @@ public:
 		@param val the value to set the column to
 	  */
 	virtual void set(const string&);
-};
 
+	virtual bool is_column() const override { return true; }
+
+};
 
 
 /**
@@ -691,6 +794,30 @@ public:
 
 
 
+class columns : public column_group
+{
+public:
+
+	columns(column_group& par, const string& nam, column_item_list l)
+	: column_group(&par, nam) 
+	{ 
+		add(l);
+	}	
+
+	columns(column_group& par, const string& nam)
+	: columns(par, nam, {}) { }
+
+	columns(const string& nam, column_item_list l)
+	: column_group(nullptr, nam) { add(l); }
+
+	columns(const string& nam)
+	: columns(nam, {}) { }
+
+	virtual bool is_columns() const override {
+		return true;
+	}
+};
+
 
 
 
@@ -805,6 +932,11 @@ public:
 	virtual output_table* table() override;
 
 
+	virtual bool is_table() const override {
+		return true;
+	}
+
+
 	/**
 		Return the locking status of the table.
 
@@ -814,16 +946,6 @@ public:
 	  */
 	inline bool is_locked() const { return _locked; }
 
-
-	/**
-	   \brief Add a column to this table.
-	 */
-	void add(basic_column& col);
-
-	/**
-	   \brief Remove a column to this table.
-	 */
-	void remove(basic_column& col);
 
 	/**
 		\brief Bind this table to an output_file
@@ -983,22 +1105,13 @@ public:
 	result_table(const string& _name);
 
 	/**
-		Initializer-list of pointers to columns
-	  */
-	typedef std::initializer_list<basic_column *> column_list;
-
-	/**
 		\brief Construct a table and add columns
 		@param _name the table name
 		@param col a list of column objects to add
 	  */
 	result_table(const string& _name,
-		column_list col);
+		column_item_list col);
 
-	/**
-		\brief Add a set of column ojects to the table
-	  */
-	void add(column_list col);
 
 	/**
 		\brief Destroy the result table

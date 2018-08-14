@@ -3,6 +3,8 @@
 #include <cassert>
 #include <algorithm>
 #include <iostream>
+#include <sstream>
+#include <stack>
 
 #include <boost/core/demangle.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -71,18 +73,18 @@ output_binding* output_binding::find(list& L, output_table* t)
 
 
 column_item::column_item(column_group* p, const string& n) 
-: _parent(p), _name(n)
+: _parent(nullptr), _name(n)
 { 
 	if(_name.empty())
 		throw std::runtime_error("Column items cannot have empty name");
-	if(_parent)
-		_parent->add(this);
+	if(p)
+		p->add_item(this);
 }	
 
 column_item::~column_item()
 { 
 	if(_parent) {
-		_parent->remove(this);
+		_parent->remove_item(this);
 	}	
 }
 
@@ -104,6 +106,22 @@ void column_item::visit(const std::function<void(column_item*)>& f)
 	f(this);
 }
 
+static void output_name(std::ostream& stream, column_item* item, size_t level, const string& sep)
+{
+	if(item->parent() && !item->parent()->is_table())
+		output_name(stream, item->parent(), level+1, sep);
+	stream << item->name();
+	if(level>0)
+		stream << sep;
+}
+
+string column_item::path_name(const string& sep)
+{
+	std::ostringstream s;
+	output_name(s, this, 0, sep);
+	return s.str();
+}
+
 
 //----------------------------------------------
 //
@@ -122,7 +140,7 @@ column_group::~column_group()
 	_check_unlocked();
 	for(auto c : _children) {
 		// dissociate with column
-		if(c) remove(c);
+		if(c) remove_item(c);
 	}	
 }
 
@@ -177,8 +195,12 @@ void column_group::_cleanup()
 }
 
 
-void column_group::add(column_item* col)
+void column_group::add_item(column_item* col)
 {
+	// col must not br a table!
+	if(col->is_table())
+		throw std::runtime_error("Cannot add a table to a group");
+
 	_check_unlocked();
 	//_cleanup();
 
@@ -195,7 +217,7 @@ void column_group::add(column_item* col)
 }
 
 
-void column_group::remove(column_item* col)
+void column_group::remove_item(column_item* col)
 {
 	_check_unlocked();
 	if(col->_parent != this) 
@@ -219,28 +241,65 @@ void column_group::visit(column_item::visitor f)
 }
 
 
-
-column_item* column_group::get(const string& path)
+column_item* column_group::get_item(const std::vector<string>& inames)
 {
-	std::vector<string> inames;
-	boost::split(inames, path, boost::is_any_of("/"));
-	if( ! std::all_of(inames.begin(), inames.end(), [](auto s) { return s.size()>0; }) )
-		throw std::runtime_error("empty name in path");
 	column_item* ret=this;
 	for(const string&  iname : inames) {
 		column_group* grp = dynamic_cast<column_group*>(ret);
 		if(! grp)
-			throw std::runtime_error("path not found");
+			throw std::runtime_error("item not found");
 		ret = grp->_item_names.at(iname);
 	}
-	return ret;
+	assert(ret != nullptr);
+	return ret;	
 }
 
-const std::vector<column_item*>& column_group::children()
+column_item* column_group::get_item(const string& path)
+{
+	std::vector<string> inames;
+	boost::split(inames, path, boost::is_any_of("/"));
+	return get_item(inames);
+}
+
+
+const std::vector<column_item*>& column_group::items()
 {
 	_cleanup();
 	return _children;
 }
+
+
+void column_group::add(basic_column& col)
+{
+	add_item(&col);
+}
+
+void column_group::remove(basic_column& col)
+{
+	remove_item(&col);
+}
+
+
+void column_group::add(columns& cols)
+{
+	add_item(&cols);
+}
+
+void column_group::remove(columns& cols)
+{
+	remove_item(&cols);
+}
+
+void column_group::add(column_item_list cl)
+{
+	for(auto& c: cl) add_item(c);
+}
+
+void column_group::remove(column_item_list cl)
+{
+	for(auto& c: cl) remove_item(c);
+}
+
 
 
 
@@ -337,8 +396,10 @@ output_table* output_table::table()
 
 void output_table::_cleanup()
 {
-	if(_dirty)
+	if(_dirty) {
+		_dirty_columns = true; // trigger the recomputation of columns
 		column_group::_cleanup();
+	}
 	assert(! _dirty);
 	if(_dirty_columns) {
 		columns.clear();
@@ -354,16 +415,16 @@ void output_table::_cleanup()
 }
 
 
-void output_table::add(basic_column& col) 
+
+basic_column* output_table::operator[](const string& n)
 {
-	column_group::add(&col);
+	column_item* retitem = get_item(n);
+	basic_column* ret = dynamic_cast<basic_column*>(retitem);
+	if(ret==nullptr)
+		throw std::out_of_range("column not in table");
+	return ret;
 }
 
-
-void output_table::remove(basic_column& col)
-{
-	column_group::remove(&col);
-}
 
 
 void output_table::emit_row()
@@ -419,7 +480,20 @@ void output_table::generate_schema(std::ostream& out)
 		out << "\t\t{" << endl;
 
 		basic_column* col = (*this)[i];
-		out << "\t\t\t\"name\": \"" << col->name() << "\"," << endl;
+		out << "\t\t\t\"name\": \"" << col->path_name() << "\"," << endl;
+
+		out << "\t\t\t\"path\": [";
+		std::stack<column_item*> stk;
+		column_item* item = col;
+		while(item!=this) { stk.push(item); item=item->parent(); }
+		while(! stk.empty()) {
+			out << "\"" << stk.top()->name() << "\"";
+			stk.pop();
+			if(!stk.empty())
+				out << ",";
+		}
+		out << "]," << endl;
+
 		out << "\t\t\t\"type\": \"" << boost::core::demangle(col->type().name()) << "\"," << endl;
 		out << "\t\t\t\"arithmetic\": " << (col->is_arithmetic() ? "true" : "false") << endl;
 
@@ -442,7 +516,7 @@ result_table::result_table(const string& _name)
 }
 
 result_table::result_table(const string& _name,
-		column_list col)
+		column_item_list col)
 	: output_table(_name, table_flavor::RESULTS)
 {
 	add(col);
@@ -452,10 +526,6 @@ result_table::result_table(const string& _name,
 	//cerr << "result table " << name() << " created"<< endl;
 }
 
-void result_table::add(column_list col)
-{
-	for(auto c : col) this->output_table::add(*c);	
-}
 
 result_table::~result_table()
 {
