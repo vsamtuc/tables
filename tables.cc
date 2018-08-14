@@ -403,12 +403,12 @@ void output_table::_cleanup()
 	}
 	assert(! _dirty);
 	if(_dirty_columns) {
-		columns.clear();
+		_columns.clear();
 
 		visit([&](column_item* item) {
 			basic_column* col = dynamic_cast<basic_column*>(item);
 			if(col)
-				columns.push_back(col);
+				_columns.push_back(col);
 		});
 
 		_dirty_columns = false;
@@ -521,19 +521,11 @@ result_table::result_table(const string& _name,
 	: output_table(_name, table_flavor::RESULTS)
 {
 	add(col);
-
-	//using std::cerr;
-	//using std::endl;
-	//cerr << "result table " << name() << " created"<< endl;
 }
 
 
 result_table::~result_table()
-{
-	using std::cerr;
-	using std::endl;
-	//cerr << "result table " << name() << " destroyed"<< endl;
-}
+{ }
 
 
 output_file::output_file()
@@ -691,7 +683,7 @@ void csvtab_formatter::prolog()
 	if(fpos == -1 || fpos == 0) {
 		for(size_t col=0;col < table.size(); col++) {
 			if(col) fputs(",", ofile->file());
-			fputs(table[col]->name().c_str(), ofile->file());
+			fputs(table[col]->path_name().c_str(), ofile->file());
 		}
 		fputs("\n", ofile->file());
 	} 
@@ -1023,7 +1015,7 @@ output_hdf5::table_handler::table_handler(output_table& _table)
 		basic_column* c = table[i];
 		if(i>0) pos = __aligned(pos+table[i-1]->size(), table[i]->align());
 		colpos[i] = pos;
-		type.insertMember(c->name(), pos, hdf_mapped_type(c));
+		type.insertMember(c->path_name(), pos, hdf_mapped_type(c));
 	}
 }
 

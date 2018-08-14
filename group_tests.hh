@@ -40,7 +40,7 @@ public:
 	void test_columns_constructor2()
 	{
 		columns par("p");
-		columns cg(par, "foo");
+		columns cg(&par, "foo");
 
 		TS_ASSERT_EQUALS(cg.name(), "foo");
 		TS_ASSERT_EQUALS(cg.parent(), &par);
@@ -53,7 +53,7 @@ public:
 	void test_table_member()
 	{
 		columns par("p");
-		columns cg(par, "foo");
+		columns cg(&par, "foo");
 
 		TS_ASSERT_EQUALS(cg.table(), nullptr);
 		TS_ASSERT_EQUALS(par.table(), nullptr);
@@ -111,8 +111,8 @@ public:
 		c1.visit(collector);
 		TS_ASSERT_EQUALS(items, (items_t {&c1, &grp, &grp.foo, &grp.bar}) );
 
-		columns c2(c1, "bar2");
-		columns c3(c1, "bar3");
+		columns c2(&c1, "bar2");
+		columns c3(&c1, "bar3");
 		c1.remove(c2);
 
 		items.clear();
@@ -124,13 +124,13 @@ public:
 	{
 		result_table tab("tab");
 
-		columns c1(tab, "foo");
+		columns c1(&tab, "foo");
 		table_mixin3 grp("grp", &c1);
 
-		columns c2(c1, "bar2");
+		columns c2(&c1, "bar2");
 		table_mixin3 grp2("grp", &c2);
 
-		columns c3(c1, "bar3");
+		columns c3(&c1, "bar3");
 
 		TS_ASSERT_EQUALS(tab.size(), 4);
 
@@ -142,13 +142,13 @@ public:
 	{
 		result_table tab("tab");
 
-		columns c1(tab, "foo");
+		columns c1(&tab, "foo");
 		table_mixin3 grp("grp", &c1);
 
-		columns c2(c1, "bar2");
+		columns c2(&c1, "bar2");
 		table_mixin3 grp2("grp", &c2);
 
-		columns c3(c1, "bar3");
+		columns c3(&c1, "bar3");
 
 		TS_ASSERT_EQUALS(tab.get_item("foo"), &c1);
 		TS_ASSERT_EQUALS(tab.get_item("foo/grp"), &grp);
@@ -166,13 +166,13 @@ public:
 	{
 		result_table tab("tab");
 
-		columns c1(tab, "foo");
+		columns c1(&tab, "foo");
 		table_mixin3 grp("grp", &c1);
 
-		columns c2(c1, "bar2");
+		columns c2(&c1, "bar2");
 		table_mixin3 grp2("grp", &c2);
 
-		columns c3(c1, "bar3");
+		columns c3(&c1, "bar3");
 
 		TS_ASSERT_EQUALS(string("foo"), c1.path_name());
 		TS_ASSERT_EQUALS(string("foo/grp"), grp.path_name());
@@ -186,6 +186,50 @@ public:
 		TS_ASSERT_EQUALS(string("foo/bar3"), c3.path_name());		
 
 		TS_ASSERT_EQUALS(string("foo::bar2::grp::foo"), grp2.foo.path_name("::"));
+	}
+
+
+	struct hier_table : result_table 
+	{
+		column<bool> bool_attr { this, "bool_attr", "%d"};
+		column<int16_t> sid { this, "sid", "%hd" };
+		column<int16_t> hid { this, "hid", "%hd" };
+		columns ms { this, "measurements" };
+		column<double> zeta { &ms, "zeta", "%.10g" };
+		column<size_t> nsize { &ms, "nsize", "%zu" };
+		column<string> mname { &ms, "mname", 31, "%s" };
+
+		void fill_columns(size_t i)
+		{
+			bool_attr = (i%3)==1;
+			sid = i;
+			hid = i;
+			zeta = i/2.;
+			nsize = i*2;
+
+			std::ostringstream ss; 
+			ss << "this is record " << i;
+
+			mname = ss.str();
+		}
+
+		using result_table::result_table;
+	};
+
+	void test_output_hdf5_table_handler_data()
+	{
+		using namespace H5;
+
+		hier_table tab("hier_table");
+		output_hdf5 file("hier_table.h5", open_mode::truncate);
+		tab.bind(&file);
+		size_t Nrec = 10;
+		tab.prolog();
+		for(size_t i=0; i<Nrec; i++) {
+			tab.fill_columns(i);
+			tab.emit_row();
+		}
+		tab.epilog();
 	}
 
 };

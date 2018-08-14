@@ -798,13 +798,13 @@ class columns : public column_group
 {
 public:
 
-	columns(column_group& par, const string& nam, column_item_list l)
-	: column_group(&par, nam) 
+	columns(column_group* par, const string& nam, column_item_list l)
+	: column_group(par, nam) 
 	{ 
 		add(l);
 	}	
 
-	columns(column_group& par, const string& nam)
+	columns(column_group* par, const string& nam)
 	: columns(par, nam, {}) { }
 
 	columns(const string& nam, column_item_list l)
@@ -903,7 +903,7 @@ class output_table : public column_group
 private:
 	bool _dirty_columns;		// flags that columns needs to be rebuilt
 	friend class column_group;
-	std::vector<basic_column *> columns;		// the columns
+	std::vector<basic_column *> _columns;		// the columns
 
 protected:
 	bool en;					// enabled flag
@@ -994,7 +994,7 @@ public:
 	  */
 	inline size_t size() { 
 		_cleanup();
-		return columns.size(); 
+		return _columns.size(); 
 	}
 
 	/**
@@ -1002,7 +1002,7 @@ public:
 	  */
 	inline basic_column* operator[](size_t i) { 
 		_cleanup();
-		return columns.at(i); 
+		return _columns.at(i); 
 	}
 
 	/**
