@@ -24,12 +24,12 @@ AM_CONDITIONAL(DEBUG, test x$debug = xtrue)
 AC_PROG_CXX
 AC_PROG_RANLIB
 
-DX_INIT_DOXYGEN([tables])
 DX_DOXYGEN_FEATURE(on)
 DX_DOT_FEATURE(on)
 DX_HTML_FEATURE(on)
 DX_PS_FEATURE(off)
 DX_PDF_FEATURE(off)
+DX_INIT_DOXYGEN([tables])
 
 # Checks for libraries.
 
