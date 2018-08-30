@@ -16,8 +16,8 @@
 
 namespace H5
 {
-	struct Group;
-	struct H5File;
+	class Group;
+	class H5File;
 }
 
 namespace tables
@@ -44,10 +44,10 @@ class columns;
 	columns, and tables. This is basically a named node
 	in a hierarchical space.
 
-	Objects of this class and its subclasses are not copyable or 
+	Objects of this class and its subclasses are not copyable or
 	movable. Therefore, proper lifetime management must be provided.
   */
-class column_item 
+class column_item
 {
 private:
 	column_group* _parent;
@@ -89,7 +89,7 @@ public:
 
 	/**
 	  \brief Return the path_name of this item.
-	   
+
 	   The path name is of the form
 	   ```
 	   N1/N2/.../Nthis
@@ -168,11 +168,11 @@ protected:
 	std::vector<column_item *> _children;					//< the children
 	std::unordered_map<string, column_item*> _item_names;	//< the child names (must be unique)
 
-	/** 
+	/**
 		Signals that children have been deleted.
 		This may leave nulls in the _children vector.
 	  */
-	bool _dirty;											
+	bool _dirty;
 
 	/**
 		Mark the _children vector as dirty (containing nulls).
@@ -273,7 +273,7 @@ public:
 	/**
 	  	\brief Get an item by path name
 
-	  	A path has the form 
+	  	A path has the form
 	  	```
 	  	N1/N2/.../Nk
 	  	```
@@ -302,7 +302,7 @@ public:
 	value.
 
 	A column may be added to a table at a later stage. This is done from
-	the table side.	Because columns are table components, they are non-copyable, 
+	the table side.	Because columns are table components, they are non-copyable,
 	non-movable objects.
   */
 class basic_column : public column_item
@@ -321,13 +321,13 @@ public:
 		\brief Construct a column
 		@param _tab the table to put the column in
 		@param _name name of the column
-		@param f the \c printf format for this column 
+		@param f the \c printf format for this column
 		@param _t a \c type_info for this column
 		@param _s the binary for the column type
 		@param _a the binary alignment for the column type
 	  */
 	basic_column(
-		column_group* _group, const string& _name, const string& f, 
+		column_group* _group, const string& _name, const string& f,
 		const type_info& _t, size_t _s, size_t _a);
 
 	basic_column(const basic_column&)=delete;
@@ -416,12 +416,12 @@ public:
 
 	This kind of column provides storage for its current value internally,
 
-	@tparam the type of the column 
+	@tparam the type of the column
   */
 template <typename T>
 class column : public basic_column
 {
-	static_assert(std::is_arithmetic<T>::value, 
+	static_assert(std::is_arithmetic<T>::value,
 		"Column on non-arithmentic type");
 protected:
 	T val;
@@ -431,36 +431,36 @@ public:
 		\brief Construct a column bound to a table
 		@param _tab the table to hold the column
 		@param _n   the column name
-		@param fmt  the column's text format 
+		@param fmt  the column's text format
 	  */
-	column(column_group* _grp, const string& _n, const string& fmt) 
+	column(column_group* _grp, const string& _n, const string& fmt)
 	: basic_column(_grp, _n, fmt, typeid(T), sizeof(T), alignof(T)) { }
 
 	/**
 		\brief Construct an unbound column
 		@param _n   the column name
-		@param fmt  the column's text format 
+		@param fmt  the column's text format
 	  */
-	column(const string& _n, const string& fmt) 
+	column(const string& _n, const string& fmt)
 	: basic_column(nullptr, _n, fmt, typeid(T), sizeof(T), alignof(T)) { }
 
 	/**
 		\brief Construct a column bound to a table and initialize its value
 		@param _tab the table to hold the column
 		@param _n   the column name
-		@param fmt  the column's text format 
+		@param fmt  the column's text format
 		@param _v   the initial value
 	  */
-	column(column_group* _grp, const string& _n, const string& fmt, const T& _v) 
+	column(column_group* _grp, const string& _n, const string& fmt, const T& _v)
 	: basic_column(_grp, _n, fmt, typeid(T), sizeof(T), alignof(T)), val(_v) { }
 
 	/**
 		\brief Construct an unbound column and initialize its value
 		@param _n   the column name
-		@param fmt  the column's text format 
+		@param fmt  the column's text format
 		@param _v   the initial value
 	  */
-	column(const string& _n, const string& fmt, const T& _v) 
+	column(const string& _n, const string& fmt, const T& _v)
 	: basic_column(nullptr, _n, fmt, typeid(T), sizeof(T), alignof(T)), val(_v) { }
 
 	/**
@@ -505,7 +505,7 @@ public:
 		\brief Copy the binary value of the column to a location
 		@param ptr location to copy the column value to
 	  */
-	void copy(void* ptr) { memcpy(ptr, &val, _size); }
+	void copy(void* ptr) override { memcpy(ptr, &val, _size); }
 
 	/**
 		\brief Set the column value to an arithmetic value.
@@ -521,8 +521,8 @@ public:
 	/**
 		\brief Check if the type of this column is arithmetic
 	  */
-	bool is_arithmetic() const override { 
-		return std::is_arithmetic<T>::value; 
+	bool is_arithmetic() const override {
+		return std::is_arithmetic<T>::value;
 	}
 
 };
@@ -540,44 +540,44 @@ protected:
 	const size_t maxlen;
 	string val;
 public:
-	column(column_group* _grp, const string& _n, size_t _maxlen, const string& fmt) 
-	: basic_column(_grp, _n, fmt, 
-		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])), 
-		maxlen(_maxlen) 
+	column(column_group* _grp, const string& _n, size_t _maxlen, const string& fmt)
+	: basic_column(_grp, _n, fmt,
+		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
+		maxlen(_maxlen)
 		{ }
 
-	column(const string& _n, size_t _maxlen, const string& fmt) 
-	: basic_column(nullptr, _n, fmt, 
-		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])), 
-		maxlen(_maxlen) 
+	column(const string& _n, size_t _maxlen, const string& fmt)
+	: basic_column(nullptr, _n, fmt,
+		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
+		maxlen(_maxlen)
 		{ }
 
-	column(column_group* _grp, const string& _n,  size_t _maxlen, const string& fmt, const string& _v) 
-	: basic_column(_grp, _n, fmt, 
-		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])), 
-			maxlen(_maxlen), val(_v) 
+	column(column_group* _grp, const string& _n,  size_t _maxlen, const string& fmt, const string& _v)
+	: basic_column(_grp, _n, fmt,
+		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
+			maxlen(_maxlen), val(_v)
 		{ }
 
-	column(const string& _n,  size_t _maxlen, const string& fmt, const string& _v) 
-	: basic_column(nullptr, _n, fmt, 
-		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])), 
-			maxlen(_maxlen), val(_v) 
+	column(const string& _n,  size_t _maxlen, const string& fmt, const string& _v)
+	: basic_column(nullptr, _n, fmt,
+		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
+			maxlen(_maxlen), val(_v)
 		{ }
 
 	inline const string& value() const { return this->val; }
 	inline string& value() { return val; }
-	inline void set_value(const string& v) { 
-		val=v.substr(0,maxlen); 
+	inline void set_value(const string& v) {
+		val=v.substr(0,maxlen);
 	}
-	inline string& operator=(const string& v) { 
+	inline string& operator=(const string& v) {
 		set_value(v);
-		return val; 
+		return val;
 	}
 	void emit(FILE* s) override {
 		fprintf(s, format(), value().c_str());
 	}
-	void copy(void* ptr) { 
-		strncpy((char*)ptr,val.c_str(), maxlen+1); 
+	void copy(void* ptr) override {
+		strncpy((char*)ptr,val.c_str(), maxlen+1);
 		((char*)ptr)[maxlen] = '\0';
 	}
 
@@ -592,7 +592,7 @@ public:
 //
 //
 //  Some other types of basic_column, used mostly for time-series
-// 
+//
 //
 
 /**
@@ -603,7 +603,7 @@ public:
 template <typename T>
 struct computed : basic_column
 {
-	static_assert(std::is_arithmetic<T>::value, 
+	static_assert(std::is_arithmetic<T>::value,
 		"Computed column on non-arithmentic type is not allowed");
 protected:
 	std::function<T()> func;
@@ -617,14 +617,14 @@ public:
 		@param fmt the column \c printf format
 		@param _f a function object to provide the value
 	  */
-	computed(const string& _n, const string& fmt, 
-		const std::function<T()>& _f) 
-	: basic_column(nullptr, _n, fmt, typeid(T), sizeof(T), alignof(T)), 
-		func(_f) 
+	computed(const string& _n, const string& fmt,
+		const std::function<T()>& _f)
+	: basic_column(nullptr, _n, fmt, typeid(T), sizeof(T), alignof(T)),
+		func(_f)
 	{ }
 
 	/**
-		\brief Return the column value 
+		\brief Return the column value
 		@return the current value of the column
 	  */
 	inline T value() const { return func(); }
@@ -641,15 +641,15 @@ public:
 	  */
 	void copy(void* ptr) {
 		T val = func();
-		memcpy(ptr, &val, _size); 
+		memcpy(ptr, &val, _size);
 	}
 
 	/**
 		\brief Return true if the column type is arithmetic
 		@return true iff the column type is arithmetic
 	  */
-	bool is_arithmetic() const override { 
-		return std::is_arithmetic<T>::value; 
+	bool is_arithmetic() const override {
+		return std::is_arithmetic<T>::value;
 	}
 };
 
@@ -667,7 +667,7 @@ public:
 template <typename T>
 struct column_ref : basic_column
 {
-	static_assert(std::is_arithmetic<T>::value, 
+	static_assert(std::is_arithmetic<T>::value,
 		"column_ref on non-arithmentic type");
 protected:
 	T& ref;
@@ -681,13 +681,13 @@ public:
 		@param fmt the column format
 		@param _r reference to the variable holding the column value
 	  */
-	column_ref(const string& _n, const string& fmt, T& _r) 
-	: basic_column(nullptr, _n, fmt, typeid(T), sizeof(T), alignof(T)), 
-		ref(_r) 
+	column_ref(const string& _n, const string& fmt, T& _r)
+	: basic_column(nullptr, _n, fmt, typeid(T), sizeof(T), alignof(T)),
+		ref(_r)
 	{ }
 
 	/**
-		\brief Return the current value of the 
+		\brief Return the current value of the
 	  */
 	inline T value() const { return ref; }
 
@@ -702,14 +702,14 @@ public:
 		\brief Copy the current value to a location
 	  */
 	void copy(void* ptr) {
-		memcpy(ptr, &ref, _size); 
+		memcpy(ptr, &ref, _size);
 	}
 
 	/**
 		\brief Check if the column type is arithmetic
 	  */
-	bool is_arithmetic() const override { 
-		return std::is_arithmetic<T>::value; 
+	bool is_arithmetic() const override {
+		return std::is_arithmetic<T>::value;
 	}
 };
 
@@ -741,10 +741,10 @@ public:
 		@param fmt the column format
 		@param _r reference to the variable holding the column value
 	  */
-	column_ref(const string& _n, size_t _maxlen, const string& fmt, string& _r) 
-	: basic_column(nullptr, _n, fmt, 
+	column_ref(const string& _n, size_t _maxlen, const string& fmt, string& _r)
+	: basic_column(nullptr, _n, fmt,
 		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
-		maxlen(_maxlen), ref(_r) 
+		maxlen(_maxlen), ref(_r)
 	{ }
 
 
@@ -756,15 +756,15 @@ public:
 		@param fmt the column format
 		@param _r reference to the variable holding the column value
 	  */
-	column_ref(column_group* _grp, const string& _n, size_t _maxlen, const string& fmt, string& _r) 
-	: basic_column(_grp, _n, fmt, 
+	column_ref(column_group* _grp, const string& _n, size_t _maxlen, const string& fmt, string& _r)
+	: basic_column(_grp, _n, fmt,
 		typeid(string), sizeof(char[_maxlen+1]), alignof(char[_maxlen+1])),
-		maxlen(_maxlen), ref(_r) 
+		maxlen(_maxlen), ref(_r)
 	{ }
 
 
 	/**
-		\brief Return the current value of the 
+		\brief Return the current value of the
 	  */
 	inline const string& value() const { return ref; }
 
@@ -778,7 +778,7 @@ public:
 	/**
 		\brief Copy the current value to a location
 	  */
-	void copy(void* ptr) {
+	void copy(void* ptr) override {
 		strncpy((char*)ptr, ref.c_str(), maxlen+1);
         ((char*)ptr)[maxlen] = '\0';
 	}
@@ -786,8 +786,8 @@ public:
 	/**
 		\brief Check if the column type is arithmetic
 	  */
-	bool is_arithmetic() const override { 
-		return std::is_arithmetic<string>::value; 
+	bool is_arithmetic() const override {
+		return std::is_arithmetic<string>::value;
 	}
 };
 
@@ -799,10 +799,10 @@ class columns : public column_group
 public:
 
 	columns(column_group* par, const string& nam, column_item_list l)
-	: column_group(par, nam) 
-	{ 
+	: column_group(par, nam)
+	{
 		add(l);
-	}	
+	}
 
 	columns(column_group* par, const string& nam)
 	: columns(par, nam, {}) { }
@@ -831,7 +831,7 @@ struct output_binding;
 	These objects are created by the `bind()` methods in `output_file`
 	an `output_table`.
   */
-struct output_binding 
+struct output_binding
 {
 	typedef std::list<output_binding*> list;
 	typedef typename list::iterator iter;
@@ -872,17 +872,17 @@ enum class table_flavor {
 	Once the columns are all added, and all output files are bound,
 	the `prolog()` method should be called.
 	After this point, it is legal to call `emit_row()`, therefore
-	columns should not be changed, nor should output files be 
+	columns should not be changed, nor should output files be
 	bound or unbound.
-	However, once the `epilog()` method is called, 
-	columns can be added/removed again, and files can be bound or 
+	However, once the `epilog()` method is called,
+	columns can be added/removed again, and files can be bound or
 	unbound. This design allows columns to be stored separately (in other
-	objects) and be added to a table in a preparation phase. 
+	objects) and be added to a table in a preparation phase.
 
 	There are two distinct ways to orchestrate the output process.
 
 	- A unique process that calls `emit_row()` when it decides, e.g.
-	periodically during a simulation. In this model, each column is 
+	periodically during a simulation. In this model, each column is
 	kept updated independently, and is ready to be output at any time.
 	Since no 'central' location needs to know the state of all columns,
 	columns can be added by modules as they see fit.
@@ -890,12 +890,12 @@ enum class table_flavor {
 
 	- Many processes can call `emit_row()` when they have output
 	for this table. However, they should be careful to initialize
-	every column of the table. 
+	every column of the table.
 
 	Output tables must have a non-empty name. No two tables can have the same
 	name. This is enforced by the library at construction time, the constructor
-	will throw an exception. The name should probably conform to the 'identifier' 
-	convention, as it will be used in output formats. 
+	will throw an exception. The name should probably conform to the 'identifier'
+	convention, as it will be used in output formats.
 
   */
 class output_table : public column_group
@@ -916,7 +916,7 @@ protected:
 	friend struct output_binding;
 	/**
 	   \brief Construct an output table with given name and flavor.
-	   
+
 	   This method should probably not be used, instead construct
 	   \c result_table or \c time_series objects directly.
 	*/
@@ -950,11 +950,11 @@ public:
 	/**
 		\brief Bind this table to an output_file
 	  */
-	output_binding* bind(output_file* f) { 
+	output_binding* bind(output_file* f) {
 		_check_unlocked();
 		auto b = output_binding::find(files, f);
 		if(b==nullptr)
-			b = new output_binding(f, this); 
+			b = new output_binding(f, this);
 		return b;
 	}
 
@@ -988,21 +988,21 @@ public:
 		\brief Return the table flavor (results or time_series)
 	  */
 	inline table_flavor flavor() const { return _flavor; }
-	
+
 	/**
 		\brief Return the number of columns of this table
 	  */
-	inline size_t size() { 
+	inline size_t size() {
 		_cleanup();
-		return _columns.size(); 
+		return _columns.size();
 	}
 
 	/**
 		\brief Return a column by index
 	  */
-	inline basic_column* operator[](size_t i) { 
+	inline basic_column* operator[](size_t i) {
 		_cleanup();
-		return _columns.at(i); 
+		return _columns.at(i);
 	}
 
 	/**
@@ -1032,7 +1032,7 @@ public:
 		\brief Put a table to output mode.
 
 		A call to this method must be made before any data is output,
-		but only after all columns have been added. 
+		but only after all columns have been added.
 	  */
 	void prolog();    // calls files to e.g. print a header
 
@@ -1076,7 +1076,7 @@ public:
 	// static members
 
 	typedef std::unordered_set<output_table*> registry;
-	
+
 	/**
 		\brief Get a table object by name
 	  */
@@ -1134,12 +1134,12 @@ public:
 		@param _name the table name
 	  */
 	time_series(const string& _name, const string& _nowfmt, const std::function<TimeType()>& _nowfunc)
-	: output_table(_name, table_flavor::TIMESERIES), 
-		now("time", _nowfmt, _nowfunc) 
+	: output_table(_name, table_flavor::TIMESERIES),
+		now("time", _nowfmt, _nowfunc)
 	{ add(now); }
 
 	/**
-		\brief The type of the time column. 
+		\brief The type of the time column.
 		*/
 	typedef TimeType time_type;
 
@@ -1171,7 +1171,7 @@ const open_mode default_open_mode = open_mode::truncate;
 	Output files are used to write \c output_table data to the
 	filesystem
   */
-class output_file 
+class output_file
 {
 protected:
 	output_binding::list tables;
@@ -1199,10 +1199,10 @@ public:
 		@param t the table to bind with
 		@return the binding object
 	  */
-	output_binding* bind(output_table& t) { 
+	output_binding* bind(output_table& t) {
 		auto b = output_binding::find(tables, &t);
 		if(b==nullptr)
-			b = new output_binding(this, &t); 
+			b = new output_binding(this, &t);
 		return b;
 	}
 
@@ -1269,7 +1269,7 @@ output_file* open_file(const string& url);
 /**
 	\brief Specify the format of text files
 
-	\c csvtab Formats rows without a header, which is 
+	\c csvtab Formats rows without a header, which is
 	a problem for multi-table output. Columns are separated
 	by comma. There is a header at the top row
 
@@ -1277,13 +1277,13 @@ output_file* open_file(const string& url);
 	row values are separated by ,
   */
 enum class text_format {
-	csvtab,    
+	csvtab,
 	csvrel
 };
 const text_format default_text_format = text_format::csvrel;
 
 // forward
-struct output_c_file;
+class output_c_file;
 
 /**
 	\brief Base class for text file formatters
@@ -1326,7 +1326,7 @@ public:
 		\brief Construct without a stream
 		@param _fmt the format
 	  */
-	output_c_file(text_format _fmt=default_text_format) 
+	output_c_file(text_format _fmt=default_text_format)
 		: stream(0), filepath(), owner(false), fmt(_fmt) {}
 
 	/**
@@ -1343,13 +1343,13 @@ public:
 		@param mode the open mode
 		@param _fmt the format
 	  */
-	output_c_file(const string& _fpath, 
+	output_c_file(const string& _fpath,
 		open_mode mode = default_open_mode, text_format _fmt=default_text_format);
 
 	/**
 		\brief Move constructor
 	  */
-	inline output_c_file(output_c_file&& other) 
+	inline output_c_file(output_c_file&& other)
 	: stream(other.stream), filepath(other.filepath), owner(other.owner), fmt(other.fmt)
 	{ other.stream = nullptr; }
 
@@ -1376,7 +1376,7 @@ public:
 		@param _fpath the file path to use
 		@param mode the open mode
 	  */
-	virtual void open(const string& _fpath, 
+	virtual void open(const string& _fpath,
 			open_mode mode = default_open_mode);
 
 	/**
@@ -1390,7 +1390,7 @@ public:
 		\brief Close a steam and reset the \c output_c_file object
 
 		This method behaves differently based on whether the stream is
-		owned or not. On an owned stream, \c fclose is called. On a 
+		owned or not. On an owned stream, \c fclose is called. On a
 		non-owned stream, \c fflush is called.
 	  */
 	virtual void close();
@@ -1459,7 +1459,7 @@ class output_mem_file : public output_c_file
 {
 	struct memstate {
 		char* buffer;
-		size_t len;		
+		size_t len;
 	};
 	memstate* state;
 public:
@@ -1504,12 +1504,12 @@ public:
 
 /**
 	\brief Progress bar.
- 
+
 	This is a utility class printing a progress bar on the terminal.
 	At construction, a total number of ticks, N, is specified.
 	Then, as method tick() is called the progress bar is displayed.
 
-	The progress bar is displayed as 
+	The progress bar is displayed as
 	```
 	My progress message: [#####                  ]
 	```
@@ -1618,7 +1618,7 @@ public:
 	output_hdf5(const H5::Group& _fg, open_mode mode=default_open_mode);
 
 	/**
-		Create a new HDF5 file (truncating it if needed) 
+		Create a new HDF5 file (truncating it if needed)
 		and place the output in the root group.
 	  */
 	output_hdf5(const string& h5file, open_mode mode=default_open_mode);
@@ -1647,4 +1647,3 @@ public:
 
 
 } // end namespace tables
-
