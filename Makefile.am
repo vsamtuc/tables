@@ -14,6 +14,7 @@ lib_LIBRARIES= libtables.a
 libtables_a_SOURCES=tables.cc
 
 include_HEADERS= tables.hh
+pkginclude_HEADERS= tables.hh
 
 EXTRA_DIST= tables.hh tables_types.hh
 

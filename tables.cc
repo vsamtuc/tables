@@ -11,11 +11,14 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
-#include "tables.hh"
+//#include "tables.hh"
 #include "hdf5_util.hh"
 
 using namespace tables;
 
+/**
+	@file tables.cc The main implementation file
+	*/
 
 //-------------------------------------
 //

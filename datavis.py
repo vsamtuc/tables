@@ -806,6 +806,7 @@ def __make_legend(leg, sel):
 def make_plot(rel, x, y, axes, select={}, title=DEFAULT, style='linespoints',  
 			  legend=DEFAULT, 
 			  xlabel=None, ylabel=None, x_range=None, y_range=None, 
+			  x_tics=None, y_tics=None,
 			  terminal=None, logscale=None, grid=" ", key=None,
 			  output=DEFAULT):
 	"""
@@ -866,6 +867,7 @@ def make_plot(rel, x, y, axes, select={}, title=DEFAULT, style='linespoints',
 	plot = Plot(title=title, 
 				xlabel=xlabel, ylabel=ylabel, 
 				x_range=x_range, y_range=y_range, 
+				x_tics=x_tics, y_tics=y_tics,
 				terminal=terminal, logscale=logscale, grid=grid, key=key,
 				output=output)
 		
