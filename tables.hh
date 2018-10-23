@@ -1,12 +1,10 @@
-#pragma once
-#ifndef TABLES_HH
-#define TABLES_HH
-
 /**
 	@file tables.hh
 
 	The main include file of the tables library.
  */
+
+#pragma once
 
 #include <string>
 #include <vector>
@@ -21,18 +19,8 @@
 #include <typeindex>
 #include <iostream>
 
+#include "hdf5_fwd.hh"
 
-namespace H5
-{
-	class Group;
-	class H5File;
-}
-
-
-/**
-	@namespace tables
-	@brief The main namespace for entries related to the library
-  */
 namespace tables
 {
 
@@ -1612,22 +1600,22 @@ namespace tables
 	public:
 
 		/**
-			Use the location specified by the HDF5 id for the output
+			@brief Use the location specified by the HDF5 id for the output
 		  */
 		output_hdf5(long int _locid, open_mode mode=default_open_mode);
 
 		/**
-			Use the file root for the output.
+			@brief Use the file root for the output.
 		  */
 		output_hdf5(const H5::H5File& _fg, open_mode mode=default_open_mode);
 
 		/**
-			Use the group for the output.
+			@brief Use the group for the output.
 		  */
 		output_hdf5(const H5::Group& _fg, open_mode mode=default_open_mode);
 
 		/**
-			Create a new HDF5 file (truncating it if needed)
+			@brief Create a new HDF5 file (truncating it if needed)
 			and place the output in the root group.
 		  */
 		output_hdf5(const string& h5file, open_mode mode=default_open_mode);
@@ -1656,4 +1644,3 @@ namespace tables
 
 }  // end namespace tables
 
-#endif

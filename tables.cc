@@ -1,3 +1,8 @@
+/**
+	@file tables.cc The main implementation file
+
+	*/
+
 
 #include <cstddef>
 #include <cassert>
@@ -11,20 +16,15 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
-//#include "tables.hh"
 #include "hdf5_util.hh"
 
-using namespace tables;
+namespace tables {
 
-/**
-	@file tables.cc The main implementation file
-	*/
-
-//-------------------------------------
+// -------------------------------------
 //
 // bindings
 //
-//-------------------------------------
+// -------------------------------------
 
 output_binding::output_binding(output_file* f, output_table* t)
 : file(f), table(t), 
@@ -550,7 +550,7 @@ output_file::~output_file()
 #define RE_VARS RE_VAR "(?:," RE_VAR ")*" 
 #define RE_URL  RE_TYPE RE_PATH "?(?:\\?(" RE_VARS "))?" 
 
-bool tables::parse_url(const string& url, string& type, string& path, varmap& vars)
+bool parse_url(const string& url, string& type, string& path, varmap& vars)
 {
 	using std::regex;
 	using std::smatch;
@@ -621,7 +621,7 @@ T proc_enum_var(const string& var,
 }
 
 
-output_file* tables::open_file(const string& url)
+output_file* open_file(const string& url)
 {
 	string type;
 	string path;
@@ -837,8 +837,8 @@ void output_c_file::output_epilog(output_table& table)
 
 
 
-output_c_file tables::output_stdout(stdout, false);
-output_c_file tables::output_stderr(stderr, false);
+output_c_file output_stdout(stdout, false);
+output_c_file output_stderr(stderr, false);
 
 
 //-------------------------------------
@@ -1184,3 +1184,4 @@ void output_hdf5::output_epilog(output_table& table)
 }
 
 
+} // end namespace tables

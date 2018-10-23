@@ -4,7 +4,7 @@
 AC_PREREQ([2.69])
 AC_INIT([tables], [1.0.0], [vsam@softnet.tuc.gr])
 AM_INIT_AUTOMAKE
-# LT_INIT
+LT_INIT
 
 AC_CONFIG_SRCDIR([tables.hh])
 AC_CONFIG_HEADERS([config.h])
